@@ -19,20 +19,23 @@ app.get('/events', (req, res) => {
 
   req.on('close', () => {
     clients = clients.filter(c => c !== res);
+    console.log('🔴 Client SSE déconnecté, total :', clients.length);
   });
+
+  console.log('🟢 Nouveau client SSE, total :', clients.length);
 });
 
 // POST /api/pos : reçoit posX ou posY en texte brut
+// Utiliser query param ?axis=x ou ?axis=y
 app.post('/api/pos', (req, res) => {
   const val = parseFloat(req.body);
+  const axis = req.query.axis;
 
   if (isNaN(val)) {
-    console.log('⚠️ Données non valides reçues :', req.body);
+    console.log('⚠️ Valeur invalide reçue :', req.body);
     return res.status(400).send('Bad data');
   }
 
-  // On définit x ou y selon query param 'axis'
-  const axis = req.query.axis;
   if (axis === 'x') currentPos.x = val;
   else if (axis === 'y') currentPos.y = val;
   else return res.status(400).send('Missing axis');
