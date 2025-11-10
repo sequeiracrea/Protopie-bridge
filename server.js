@@ -1,60 +1,59 @@
-import express from 'express';
-import bodyParser from 'body-parser';
-import cors from 'cors';
+import express from "express";
+import bodyParser from "body-parser";
+import cors from "cors";
 
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
 
-// Liste des clients SSE connectés
+// 🧠 On capte aussi du texte brut, pas seulement du JSON
+app.use(bodyParser.text({ type: "*/*" }));
+
 let clients = [];
-let currentPos = { x: 0, y: 0 };
+let lastPos = { x: 0, y: 0 };
 
-// SSE : diffusion des coordonnées à tous les clients
-app.get('/events', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+// SSE : envoi en continu vers le front
+app.get("/events", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Access-Control-Allow-Origin", "*");
 
   clients.push(res);
-  console.log(`🟢 Nouvel abonné SSE, total : ${clients.length}`);
+  console.log(`🟢 Nouveau client SSE, total : ${clients.length}`);
 
-  // Envoi immédiat de la position actuelle au nouveau client
-  res.write(`data: ${JSON.stringify(currentPos)}\n\n`);
+  // Envoi de la dernière position
+  res.write(`data: ${JSON.stringify(lastPos)}\n\n`);
 
-  req.on('close', () => {
-    clients = clients.filter(c => c !== res);
+  req.on("close", () => {
+    clients = clients.filter((c) => c !== res);
     console.log(`🔴 Client SSE déconnecté, total : ${clients.length}`);
   });
 });
 
-// Fonction pour diffuser les coordonnées à tous les clients
-function broadcast(data) {
-  const payload = JSON.stringify(data);
-  clients.forEach(c => c.write(`data: ${payload}\n\n`));
-  console.log('📩 Données diffusées :', data);
-}
+// POST /api/pos
+app.post("/api/pos", (req, res) => {
+  console.log("📦 Données brutes reçues :", req.body);
 
-// POST /api/x : reçoit la valeur X
-app.post('/api/x', (req, res) => {
-  const x = Number(req.body.value);
-  if (isNaN(x)) return res.status(400).send('x must be a number');
+  let data;
+  try {
+    data = JSON.parse(req.body);
+  } catch (err) {
+    console.warn("⚠️ JSON invalide, ignoré :", req.body);
+    return res.sendStatus(400);
+  }
 
-  currentPos.x = x;
-  broadcast(currentPos);
+  if (typeof data.x === "number" && typeof data.y === "number") {
+    lastPos = data;
+    const payload = JSON.stringify(data);
+    clients.forEach((c) => c.write(`data: ${payload}\n\n`));
+    console.log("📩 Données valides :", data);
+  } else {
+    console.warn("⚠️ Données incorrectes :", data);
+  }
+
   res.sendStatus(200);
 });
 
-// POST /api/y : reçoit la valeur Y
-app.post('/api/y', (req, res) => {
-  const y = Number(req.body.value);
-  if (isNaN(y)) return res.status(400).send('y must be a number');
-
-  currentPos.y = y;
-  broadcast(currentPos);
-  res.sendStatus(200);
-});
-
-// Port
+// Port Render
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Bridge en ligne sur port ${PORT}`));
