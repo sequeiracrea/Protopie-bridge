@@ -1,7 +1,16 @@
+import express from 'express';
+import bodyParser from 'body-parser';
+import cors from 'cors';
+
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
+
+// Liste des clients SSE connectés
 let clients = [];
 let currentPos = { x: 0, y: 0 };
 
-// SSE
+// SSE : diffusion des coordonnées à tous les clients
 app.get('/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -10,32 +19,37 @@ app.get('/events', (req, res) => {
   clients.push(res);
   console.log(`🟢 Nouvel abonné SSE, total : ${clients.length}`);
 
+  // Envoi immédiat de la position actuelle au nouveau client
+  res.write(`data: ${JSON.stringify(currentPos)}\n\n`);
+
   req.on('close', () => {
     clients = clients.filter(c => c !== res);
     console.log(`🔴 Client SSE déconnecté, total : ${clients.length}`);
   });
 });
 
-// Diffusion vers tous les clients SSE
+// Fonction pour diffuser les coordonnées à tous les clients
 function broadcast(data) {
   const payload = JSON.stringify(data);
   clients.forEach(c => c.write(`data: ${payload}\n\n`));
   console.log('📩 Données diffusées :', data);
 }
 
-// POST X
+// POST /api/x : reçoit la valeur X
 app.post('/api/x', (req, res) => {
   const x = Number(req.body.value);
   if (isNaN(x)) return res.status(400).send('x must be a number');
+
   currentPos.x = x;
   broadcast(currentPos);
   res.sendStatus(200);
 });
 
-// POST Y
+// POST /api/y : reçoit la valeur Y
 app.post('/api/y', (req, res) => {
   const y = Number(req.body.value);
   if (isNaN(y)) return res.status(400).send('y must be a number');
+
   currentPos.y = y;
   broadcast(currentPos);
   res.sendStatus(200);
