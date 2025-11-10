@@ -3,47 +3,46 @@ import cors from 'cors';
 
 const app = express();
 app.use(cors());
-app.use(express.text({ type: '*/*' })); // On lit le body brut
 
+// Stockage des clients SSE
 let clients = [];
-let currentPos = { x: 0, y: 0 };
 
-// SSE : envoi des positions X/Y à tous les embeds connectés
+// SSE : envoi des positions X/Y à tous les clients connectés
 app.get('/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
   clients.push(res);
-  res.write(`data: ${JSON.stringify(currentPos)}\n\n`);
+  console.log('🟢 Nouveau client SSE, total :', clients.length);
 
   req.on('close', () => {
     clients = clients.filter(c => c !== res);
     console.log('🔴 Client SSE déconnecté, total :', clients.length);
   });
-
-  console.log('🟢 Nouveau client SSE, total :', clients.length);
 });
 
-// POST /api/pos : reçoit posX ou posY en texte brut
-// Utiliser query param ?axis=x ou ?axis=y
-app.post('/api/pos', (req, res) => {
-  const val = parseFloat(req.body);
-  const axis = req.query.axis;
+// Stockage de la dernière position
+let latestPos = { x: 0, y: 0 };
 
-  if (isNaN(val)) {
-    console.log('⚠️ Valeur invalide reçue :', req.body);
-    return res.status(400).send('Bad data');
+// POST /api/pos?axis=x ou ?axis=y
+app.post('/api/pos', express.text({ type: '*/*' }), (req, res) => {
+  const axis = req.query.axis; // "x" ou "y"
+  const value = parseFloat(req.body);
+
+  if (!axis || isNaN(value)) {
+    console.log('⚠️ Données non valides reçues :', req.body);
+    return res.status(400).send('Invalid data');
   }
 
-  if (axis === 'x') currentPos.x = val;
-  else if (axis === 'y') currentPos.y = val;
-  else return res.status(400).send('Missing axis');
+  if (axis === 'x') latestPos.x = value;
+  if (axis === 'y') latestPos.y = value;
 
-  // Broadcast aux clients SSE
-  clients.forEach(c => c.write(`data: ${JSON.stringify(currentPos)}\n\n`));
-  console.log('📩 Données reçues :', currentPos);
+  // Envoi SSE aux clients
+  const data = JSON.stringify(latestPos);
+  clients.forEach(c => c.write(`data: ${data}\n\n`));
 
+  console.log('📦 Données reçues :', latestPos);
   res.sendStatus(200);
 });
 
