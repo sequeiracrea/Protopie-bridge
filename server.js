@@ -12,23 +12,26 @@ let clients = [];
 let lastPos = { x: 0, y: 0 };
 
 // SSE : envoi en continu vers le front
-app.get("/events", (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("Access-Control-Allow-Origin", "*");
+app.get('/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
 
   clients.push(res);
-  console.log(`🟢 Nouveau client SSE, total : ${clients.length}`);
+  console.log('🟢 Nouveau client SSE, total :', clients.length);
 
-  // Envoi de la dernière position
-  res.write(`data: ${JSON.stringify(lastPos)}\n\n`);
+  const keepAlive = setInterval(() => {
+    res.write(`:\n\n`); // envoi un ping SSE
+  }, 15000);
 
-  req.on("close", () => {
-    clients = clients.filter((c) => c !== res);
-    console.log(`🔴 Client SSE déconnecté, total : ${clients.length}`);
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    clients = clients.filter(c => c !== res);
+    console.log('🔴 Client SSE déconnecté, total :', clients.length);
   });
 });
+
 
 // POST /api/pos
 app.post('/api/pos', (req, res) => {
