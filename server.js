@@ -22,7 +22,8 @@ app.get('/events', (req, res) => {
 });
 
 // POST /api/pos : reçoit {x, y} depuis Connect
-app.post('/api/pos', (req, res) console.log(req.body) => {
+app.post('/api/pos', (req, res) => {
+  console.log(req.body)
   const { x, y } = req.body;
 
   if (typeof x !== 'number' || typeof y !== 'number') {
