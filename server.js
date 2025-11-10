@@ -31,26 +31,19 @@ app.get("/events", (req, res) => {
 });
 
 // POST /api/pos
-app.post("/api/pos", (req, res) => {
-  console.log("📦 Données brutes reçues :", req.body);
-
+app.post('/api/pos', (req, res) => {
   let data;
   try {
     data = JSON.parse(req.body);
-  } catch (err) {
-    console.warn("⚠️ JSON invalide, ignoré :", req.body);
-    return res.sendStatus(400);
+  } catch {
+    console.log('⚠️ JSON invalide reçu :', req.body);
+    return res.status(400).send('Bad JSON');
   }
+  
+  const { x, y } = data;
 
-  if (typeof data.x === "number" && typeof data.y === "number") {
-    lastPos = data;
-    const payload = JSON.stringify(data);
-    clients.forEach((c) => c.write(`data: ${payload}\n\n`));
-    console.log("📩 Données valides :", data);
-  } else {
-    console.warn("⚠️ Données incorrectes :", data);
-  }
-
+  clients.forEach(c => c.write(`data: ${JSON.stringify({ x, y })}\n\n`));
+  console.log('📩 Données reçues :', { x, y });
   res.sendStatus(200);
 });
 
