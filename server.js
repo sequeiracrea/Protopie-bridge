@@ -8,7 +8,26 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 let clients = [];
-let latest = { x: 0, y: 0 };
+let currentPos = { x: 0, y: 0 };
+
+app.post('/api/x', (req, res) => {
+  currentPos.x = Number(req.body.value);
+  broadcast(currentPos);
+  res.sendStatus(200);
+});
+
+app.post('/api/y', (req, res) => {
+  currentPos.y = Number(req.body.value);
+  broadcast(currentPos);
+  res.sendStatus(200);
+});
+
+function broadcast(data) {
+  const payload = JSON.stringify(data);
+  clients.forEach(c => c.write(`data: ${payload}\n\n`));
+  console.log('📩 Données diffusées :', data);
+}
+
 
 // --- 🔸 SSE : diffusion en temps réel ---
 app.get("/events", (req, res) => {
