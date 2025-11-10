@@ -1,6 +1,7 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
+// server.js (ES Module)
+import express from 'express';
+import bodyParser from 'body-parser';
+import cors from 'cors';
 
 const app = express();
 app.use(cors());
@@ -29,7 +30,6 @@ app.post('/api/pos', (req, res) => {
     return res.status(400).send('Bad Request: x and y must be numbers');
   }
 
-  // Envoi aux clients SSE
   const data = JSON.stringify({ x, y });
   clients.forEach(c => c.write(`data: ${data}\n\n`));
 
