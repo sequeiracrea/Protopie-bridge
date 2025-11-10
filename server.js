@@ -1,53 +1,58 @@
 import express from 'express';
 import cors from 'cors';
+import { WebSocketServer } from 'ws';
 
 const app = express();
 app.use(cors());
-
-let clients = [];
-
-// SSE : envoi des positions X/Y à tous les embeds connectés
-app.get('/events', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  clients.push(res);
-  console.log(`🟢 Nouveau client SSE, total : ${clients.length}`);
-
-  req.on('close', () => {
-    clients = clients.filter(c => c !== res);
-    console.log(`🔴 Client SSE déconnecté, total : ${clients.length}`);
-  });
-
-  // Initialisation à 0/0
-  res.write(`data: ${JSON.stringify({ x: 0, y: 0 })}\n\n`);
-});
-
-// POST /api/posX et /api/posY : reçoit x ou y depuis Connect
-app.post('/api/posX', express.text({ type: '*/*' }), (req, res) => {
-  const x = parseFloat(req.body);
-  if (isNaN(x)) {
-    console.log('⚠️ x invalide :', req.body);
-    return res.status(400).send('Invalid X');
-  }
-
-  clients.forEach(c => c.write(`data: ${JSON.stringify({ x })}\n\n`));
-  console.log('📩 x reçu :', x);
-  res.sendStatus(200);
-});
-
-app.post('/api/posY', express.text({ type: '*/*' }), (req, res) => {
-  const y = parseFloat(req.body);
-  if (isNaN(y)) {
-    console.log('⚠️ y invalide :', req.body);
-    return res.status(400).send('Invalid Y');
-  }
-
-  clients.forEach(c => c.write(`data: ${JSON.stringify({ y })}\n\n`));
-  console.log('📩 y reçu :', y);
-  res.sendStatus(200);
-});
+app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Bridge en ligne sur port ${PORT}`));
+
+// Stocke la dernière position
+let lastPos = { x: 0, y: 0 };
+
+// Serveur HTTP basique (test)
+app.get('/', (req, res) => {
+  res.send('Bridge WebSocket en ligne !');
+});
+
+// Recevoir les positions depuis Connect
+app.post('/api/pos', (req, res) => {
+  const { x, y } = req.body;
+
+  if (typeof x !== 'number' || typeof y !== 'number') {
+    console.log('⚠️ x ou y invalide :', req.body);
+    return res.status(400).send('x et y doivent être des nombres');
+  }
+
+  lastPos = { x, y };
+  console.log('📩 Données reçues :', lastPos);
+
+  // Envoie à tous les clients WebSocket
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(JSON.stringify(lastPos));
+    }
+  });
+
+  res.sendStatus(200);
+});
+
+// Démarrage du serveur HTTP
+const server = app.listen(PORT, () => {
+  console.log(`🚀 Bridge WebSocket en ligne sur port ${PORT}`);
+});
+
+// WebSocket
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws) => {
+  console.log('🟢 Nouveau client WebSocket connecté, total :', wss.clients.size);
+
+  // Envoie immédiatement la dernière position
+  ws.send(JSON.stringify(lastPos));
+
+  ws.on('close', () => {
+    console.log('🔴 Client WebSocket déconnecté, total :', wss.clients.size);
+  });
+});
