@@ -1,4 +1,3 @@
-// server.js (ES Module)
 import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
@@ -9,7 +8,7 @@ app.use(bodyParser.json());
 
 let clients = [];
 
-// SSE : /events
+// SSE : envoi des positions X/Y à tous les embeds connectés
 app.get('/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -22,7 +21,7 @@ app.get('/events', (req, res) => {
   });
 });
 
-// POST /api/pos
+// POST /api/pos : reçoit {x, y} depuis Connect
 app.post('/api/pos', (req, res) => {
   const { x, y } = req.body;
 
@@ -37,5 +36,6 @@ app.post('/api/pos', (req, res) => {
   res.sendStatus(200);
 });
 
+// Port
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Bridge en ligne sur port ${PORT}`));
