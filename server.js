@@ -8,16 +8,17 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// ---- Gestion SSE ----
+// --------------------
+// Liste des clients SSE
 let clients = [];
 
-// Route SSE : chaque client s'abonne ici
+// Route SSE : les clients s'abonnent ici
 app.get("/events", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
-  // Ajoute le client à la liste
+  // Ajoute ce client à la liste
   clients.push(res);
 
   // Retire le client si la connexion se ferme
@@ -26,12 +27,18 @@ app.get("/events", (req, res) => {
   });
 });
 
-// ---- Réception des données depuis ProtoPie Connect ----
+// --------------------
+// Réception des positions depuis ProtoPie Connect
 app.post("/api/pos", (req, res) => {
   const { x, y } = req.body;
+
+  if (typeof x !== "number" || typeof y !== "number") {
+    return res.status(400).json({ error: "x et y doivent être des nombres" });
+  }
+
   console.log("📩 Données reçues :", req.body);
 
-  // Envoie les données à tous les clients connectés
+  // Diffuse les données à tous les clients SSE
   clients.forEach(client => {
     client.write(`data: ${JSON.stringify({ x, y })}\n\n`);
   });
@@ -39,7 +46,10 @@ app.post("/api/pos", (req, res) => {
   res.json({ status: "OK" });
 });
 
-// ---- Démarrage ----
+// --------------------
+// Démarrage du serveur
 app.listen(PORT, () => {
   console.log(`🚀 Bridge en ligne sur port ${PORT}`);
+  console.log(`📡 SSE disponible sur /events`);
+  console.log(`📬 API POST disponible sur /api/pos`);
 });
