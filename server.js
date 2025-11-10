@@ -3,27 +3,31 @@ import cors from "cors";
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // permet de lire le body JSON
 
-// ---- Route principale pour test ----
+// Vérification que le bridge tourne
 app.get("/", (req, res) => {
   res.send("✅ ProtoPie Bridge actif !");
 });
 
-// ---- Route API pour recevoir posX et posY ----
+// Route API pour recevoir les positions
 app.post("/api/pos", (req, res) => {
   const { x, y } = req.body;
-  console.log("📩 Données reçues :", x, y);
+  console.log("📩 Données reçues :", req.body);
 
-  // Vérifie que les valeurs existent
-  if (typeof x === "undefined" || typeof y === "undefined") {
+  if (x === undefined || y === undefined) {
     return res.status(400).json({ error: "Missing x or y" });
   }
 
-  // Réponse test pour Connect
-  res.json({ success: true, received: { x, y } });
+  // Réponse simple pour Connect
+  res.json({
+    success: true,
+    received: { x, y },
+    message: "Coordonnées bien reçues 🚀"
+  });
 });
 
-// ---- Lancement du serveur ----
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Bridge en ligne sur port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Bridge en ligne sur port ${PORT}`);
+});
