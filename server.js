@@ -3,14 +3,18 @@ import bodyParser from "body-parser";
 import cors from "cors";
 
 const app = express();
+
+// Active CORS globalement pour toutes les routes POST/GET classiques
 app.use(cors());
-app.use(bodyParser.urlencoded({ extended: true })); // <– accepte x=...&y=...
-app.use(bodyParser.json()); // pour compatibilité éventuelle
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 
 let clients = [];
 
-// --- Stream d'événements (SSE) ---
+// --- Route SSE (événements temps réel) ---
 app.get("/events", (req, res) => {
+  // 🔧 Autoriser explicitement les connexions depuis ton viewer
+  res.setHeader("Access-Control-Allow-Origin", "*"); // ou mets ton domaine à la place si tu veux restreindre
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -18,6 +22,7 @@ app.get("/events", (req, res) => {
   clients.push(res);
   console.log("🟢 Nouveau client SSE, total :", clients.length);
 
+  // Supprime le client à la déconnexion
   req.on("close", () => {
     clients = clients.filter((c) => c !== res);
     console.log("🔴 Client SSE déconnecté, total :", clients.length);
@@ -26,6 +31,8 @@ app.get("/events", (req, res) => {
 
 // --- Réception des positions depuis Connect ---
 app.post("/api/pos", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
   console.log("📦 Données brutes reçues :", req.body);
 
   const x = parseFloat(req.body.x);
@@ -43,5 +50,6 @@ app.post("/api/pos", (req, res) => {
   res.sendStatus(200);
 });
 
+// --- Port ---
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Bridge en ligne sur port ${PORT}`));
