@@ -1,58 +1,64 @@
-import express from 'express';
-import cors from 'cors';
-import { WebSocketServer } from 'ws';
+import express from "express";
+import cors from "cors";
+import bodyParser from "body-parser";
 
 const app = express();
-app.use(cors());
-app.use(express.json());
 
-const PORT = process.env.PORT || 10000;
+// ✅ Autorise ton domaine Cloudflare / GitHub Pages
+app.use(
+  cors({
+    origin: [
+      "https://generative-pattern.pages.dev", // ← ton front Cloudflare
+      "https://tonuser.github.io", // ← si tu héberges aussi sur GitHub Pages
+    ],
+    methods: ["GET", "POST"],
+  })
+);
 
-// Stocke la dernière position
-let lastPos = { x: 0, y: 0 };
+app.use(bodyParser.text({ type: "*/*" }));
 
-// Serveur HTTP basique (test)
-app.get('/', (req, res) => {
-  res.send('Bridge WebSocket en ligne !');
+let clients = [];
+let currentPos = { x: 0, y: 0 };
+
+// 🔵 SSE : pour le viewer
+app.get("/events", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  clients.push(res);
+  console.log("🟢 Nouveau client SSE, total :", clients.length);
+  res.write(`data: ${JSON.stringify(currentPos)}\n\n`);
+
+  req.on("close", () => {
+    clients = clients.filter((c) => c !== res);
+    console.log("🔴 Client SSE déconnecté, total :", clients.length);
+  });
 });
 
-// Recevoir les positions depuis Connect
-app.post('/api/pos', (req, res) => {
-  const { x, y } = req.body;
+function broadcast(data) {
+  clients.forEach((c) => c.write(`data: ${JSON.stringify(data)}\n\n`));
+}
 
-  if (typeof x !== 'number' || typeof y !== 'number') {
-    console.log('⚠️ x ou y invalide :', req.body);
-    return res.status(400).send('x et y doivent être des nombres');
-  }
-
-  lastPos = { x, y };
-  console.log('📩 Données reçues :', lastPos);
-
-  // Envoie à tous les clients WebSocket
-  wss.clients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(JSON.stringify(lastPos));
-    }
-  });
-
+// 🔸 Reçoit posX
+app.post("/api/posX", (req, res) => {
+  const x = parseFloat(req.body);
+  if (isNaN(x)) return res.status(400).send("x invalide");
+  currentPos.x = x;
+  broadcast(currentPos);
+  console.log("📩 x reçu :", x);
   res.sendStatus(200);
 });
 
-// Démarrage du serveur HTTP
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Bridge WebSocket en ligne sur port ${PORT}`);
+// 🔸 Reçoit posY
+app.post("/api/posY", (req, res) => {
+  const y = parseFloat(req.body);
+  if (isNaN(y)) return res.status(400).send("y invalide");
+  currentPos.y = y;
+  broadcast(currentPos);
+  console.log("📩 y reçu :", y);
+  res.sendStatus(200);
 });
 
-// WebSocket
-const wss = new WebSocketServer({ server });
-
-wss.on('connection', (ws) => {
-  console.log('🟢 Nouveau client WebSocket connecté, total :', wss.clients.size);
-
-  // Envoie immédiatement la dernière position
-  ws.send(JSON.stringify(lastPos));
-
-  ws.on('close', () => {
-    console.log('🔴 Client WebSocket déconnecté, total :', wss.clients.size);
-  });
-});
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🚀 Bridge en ligne sur port ${PORT}`));
