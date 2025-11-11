@@ -1,7 +1,7 @@
 {
   "name": "protopie-bridge",
   "version": "1.0.0",
-  "description": "Bridge WebSocket entre ProtoPie Connect et le front-end",
+  "description": "Bridge temps réel entre ProtoPie et une page web via WebSocket ou SSE",
   "main": "server.js",
   "type": "module",
   "scripts": {
