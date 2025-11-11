@@ -1,66 +1,64 @@
-import express from 'express';
-import cors from 'cors';
-import bodyParser from 'body-parser';
-import { WebSocketServer } from 'ws';
+import express from "express";
+import cors from "cors";
+import bodyParser from "body-parser";
 
 const app = express();
-app.use(cors());
-app.use(bodyParser.json());
 
-// ===== SSE =====
-let sseClients = [];
+// ✅ Autorise ton domaine Cloudflare / GitHub Pages
+app.use(
+  cors({
+    origin: [
+      "https://generative-pattern.pages.dev", // ← ton front Cloudflare
+      "https://tonuser.github.io", // ← si tu héberges aussi sur GitHub Pages
+    ],
+    methods: ["GET", "POST"],
+  })
+);
 
-app.get('/events', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+app.use(bodyParser.text({ type: "*/*" }));
 
-  sseClients.push(res);
-  console.log(`🟢 Nouveau client SSE, total : ${sseClients.length}`);
+let clients = [];
+let currentPos = { x: 0, y: 0 };
 
-  req.on('close', () => {
-    sseClients = sseClients.filter(c => c !== res);
-    console.log(`🔴 Client SSE déconnecté, total : ${sseClients.length}`);
+// 🔵 SSE : pour le viewer
+app.get("/events", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  clients.push(res);
+  console.log("🟢 Nouveau client SSE, total :", clients.length);
+  res.write(`data: ${JSON.stringify(currentPos)}\n\n`);
+
+  req.on("close", () => {
+    clients = clients.filter((c) => c !== res);
+    console.log("🔴 Client SSE déconnecté, total :", clients.length);
   });
 });
 
-// ===== WebSocket =====
-const wss = new WebSocketServer({ noServer: true });
-wss.on('connection', ws => {
-  console.log('🟢 Nouveau client WebSocket');
+function broadcast(data) {
+  clients.forEach((c) => c.write(`data: ${JSON.stringify(data)}\n\n`));
+}
+
+// 🔸 Reçoit posX
+app.post("/api/posX", (req, res) => {
+  const x = parseFloat(req.body);
+  if (isNaN(x)) return res.status(400).send("x invalide");
+  currentPos.x = x;
+  broadcast(currentPos);
+  console.log("📩 x reçu :", x);
+  res.sendStatus(200);
 });
 
-// ===== POST /api/pos =====
-app.post('/api/pos', (req, res) => {
-  const { x, y } = req.body;
-
-  // Valider x et y
-  if (typeof x !== 'number' || typeof y !== 'number') {
-    console.log('⚠️ x ou y invalide :', req.body);
-    return res.status(400).json({ error: 'x et y doivent être des nombres' });
-  }
-
-  // Broadcast SSE
-  sseClients.forEach(c => c.write(`data: ${JSON.stringify({ x, y })}\n\n`));
-
-  // Broadcast WebSocket
-  wss.clients.forEach(client => {
-    if (client.readyState === 1) client.send(JSON.stringify({ x, y }));
-  });
-
-  console.log('📩 Données reçues :', { x, y });
-
-  // Réponse immédiate à Connect
-  res.json({ status: 'ok' });
+// 🔸 Reçoit posY
+app.post("/api/posY", (req, res) => {
+  const y = parseFloat(req.body);
+  if (isNaN(y)) return res.status(400).send("y invalide");
+  currentPos.y = y;
+  broadcast(currentPos);
+  console.log("📩 y reçu :", y);
+  res.sendStatus(200);
 });
 
-// ===== Serveur =====
 const PORT = process.env.PORT || 10000;
-const server = app.listen(PORT, () => console.log(`🚀 Bridge en ligne sur port ${PORT}`));
-
-// Intégration SSE + WS
-server.on('upgrade', (request, socket, head) => {
-  wss.handleUpgrade(request, socket, head, ws => {
-    wss.emit('connection', ws, request);
-  });
-});
+app.listen(PORT, () => console.log(`🚀 Bridge en ligne sur port ${PORT}`));
