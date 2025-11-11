@@ -1,64 +1,55 @@
 import express from "express";
+import http from "http";
+import { WebSocketServer } from "ws";
 import cors from "cors";
-import bodyParser from "body-parser";
 
 const app = express();
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
 
-// ✅ Autorise ton domaine Cloudflare / GitHub Pages
-app.use(
-  cors({
-    origin: [
-      "https://generative-pattern.pages.dev", // ← ton front Cloudflare
-      "https://tonuser.github.io", // ← si tu héberges aussi sur GitHub Pages
-    ],
-    methods: ["GET", "POST"],
-  })
-);
+app.use(cors());
+app.use(express.json());
 
-app.use(bodyParser.text({ type: "*/*" }));
+// Variable globale pour garder la dernière position connue
+let latestData = null;
 
-let clients = [];
-let currentPos = { x: 0, y: 0 };
+// Quand un client WebSocket se connecte (le navigateur)
+wss.on("connection", (ws) => {
+  console.log("🟢 Nouveau client WebSocket connecté");
 
-// 🔵 SSE : pour le viewer
-app.get("/events", (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
+  // Envoi toutes les 30 ms de la dernière donnée connue
+  const interval = setInterval(() => {
+    if (latestData && ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify(latestData));
+      latestData = null; // Réinitialiser après envoi
+    }
+  }, 30);
 
-  clients.push(res);
-  console.log("🟢 Nouveau client SSE, total :", clients.length);
-  res.write(`data: ${JSON.stringify(currentPos)}\n\n`);
-
-  req.on("close", () => {
-    clients = clients.filter((c) => c !== res);
-    console.log("🔴 Client SSE déconnecté, total :", clients.length);
+  ws.on("close", () => {
+    console.log("🔴 Client WebSocket déconnecté");
+    clearInterval(interval);
   });
 });
 
-function broadcast(data) {
-  clients.forEach((c) => c.write(`data: ${JSON.stringify(data)}\n\n`));
-}
-
-// 🔸 Reçoit posX
-app.post("/api/posX", (req, res) => {
-  const x = parseFloat(req.body);
-  if (isNaN(x)) return res.status(400).send("x invalide");
-  currentPos.x = x;
-  broadcast(currentPos);
-  console.log("📩 x reçu :", x);
-  res.sendStatus(200);
-});
-
-// 🔸 Reçoit posY
-app.post("/api/posY", (req, res) => {
-  const y = parseFloat(req.body);
-  if (isNaN(y)) return res.status(400).send("y invalide");
-  currentPos.y = y;
-  broadcast(currentPos);
-  console.log("📩 y reçu :", y);
-  res.sendStatus(200);
+// Endpoint pour recevoir les données de ProtoPie Connect
+app.post("/api/pos", (req, res) => {
+  try {
+    const { x, y } = req.body;
+    if (typeof x === "number" && typeof y === "number") {
+      latestData = { x, y };
+      console.log(`📩 Position reçue : x=${x.toFixed(2)}, y=${y.toFixed(2)}`);
+      res.sendStatus(200);
+    } else {
+      console.warn("⚠️ Données invalides :", req.body);
+      res.status(400).send("Invalid data");
+    }
+  } catch (err) {
+    console.error("⚠️ Erreur JSON :", err.message);
+    res.status(400).send("Bad JSON");
+  }
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Bridge en ligne sur port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`🚀 Bridge WebSocket en ligne sur le port ${PORT}`);
+});
